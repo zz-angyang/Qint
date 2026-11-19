@@ -45,13 +45,13 @@ jobs:
             Copy-Item -Path "./frontend/dist/*" -Destination "./target/publish/ui/" -Recurse -Force
           }
 
-      - name: 7. 编译 Tauri 原生桌面客户端
+      - name: 7. 编译 Tauri 原生桌面客户端 (Tauri v2)
         shell: pwsh
         run: |
-          # 根据项目创建时间，这里锁定安装 Tauri v1 CLI（若作者已升级 v2 可去掉 --version "^1.0"）
-          cargo install tauri-cli --version "^1.0"
+          # 直接用 bun 全局秒装最新版 Tauri v2 CLI，省去 6 分钟的 cargo 编译时间！
+          bun add -g @tauri-apps/cli@latest
           cd src-tauri
-          cargo tauri build
+          bunx tauri build
 
       - name: 8. 上传 Webapp 便携版产物
         uses: actions/upload-artifact@v4
