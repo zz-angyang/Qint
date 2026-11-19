@@ -1,0 +1,72 @@
+name: Build Qint Windows
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动点击按钮触发构建
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. 拉取源码
+        uses: actions/checkout@v4
+
+      - name: 2. 安装 Rust 编译环境
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 3. 安装 Bun (前端构建工具)
+        uses: oven-sh/setup-bun@v2
+
+      - name: 4. 预编译后端以自动生成前端所需的 book_events.ts
+        shell: pwsh
+        run: |
+          # README 特别强调：必须先编译一次后端，才会自动生成前端依赖的 book_events.ts
+          $Env:FRONTEND_PATH = "./ui/"
+          cd webapp
+          cargo build --release
+
+      - name: 5. 编译前端界面
+        shell: pwsh
+        run: |
+          cd frontend
+          bun install
+          bun run build
+
+      - name: 6. 整理 Webapp 绿色便携版 (修正自作者的 build.ps1)
+        shell: pwsh
+        run: |
+          New-Item "./target/publish/ui" -ItemType "directory" -Force | Out-Null
+          Copy-Item -Path "./target/release/webapp.exe" -Destination "./target/publish/qint-webapp.exe" -Force
+          
+          # 兼容作者的新版 build 目录与旧版 dist 目录
+          if (Test-Path "./frontend/build") {
+            Copy-Item -Path "./frontend/build/*" -Destination "./target/publish/ui/" -Recurse -Force
+          } elseif (Test-Path "./frontend/dist") {
+            Copy-Item -Path "./frontend/dist/*" -Destination "./target/publish/ui/" -Recurse -Force
+          }
+
+      - name: 7. 编译 Tauri 原生桌面客户端
+        shell: pwsh
+        run: |
+          # 根据项目创建时间，这里锁定安装 Tauri v1 CLI（若作者已升级 v2 可去掉 --version "^1.0"）
+          cargo install tauri-cli --version "^1.0"
+          cd src-tauri
+          cargo tauri build
+
+      - name: 8. 上传 Webapp 便携版产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qint-Webapp-Portable (绿色网页服务端版)
+          path: ./target/publish/
+
+      - name: 9. 上传 Tauri 桌面客户端安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qint-Desktop-App (原生桌面端)
+          path: |
+            ./target/release/qint.exe
+            ./target/release/bundle/msi/*.msi
+            ./target/release/bundle/nsis/*.exe
+            ./src-tauri/target/release/*.exe
+            ./src-tauri/target/release/bundle/msi/*.msi
+            ./src-tauri/target/release/bundle/nsis/*.exe
